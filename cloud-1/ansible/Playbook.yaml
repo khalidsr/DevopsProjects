@@ -1,0 +1,16 @@
+---
+- name: Deploy Inception Project
+  hosts: webservers
+  become: true
+  vars_files:
+    - vars/secrets.yml
+  vars:
+    - inception_local_path: "../inception"
+    - inception_remote_path: "/inception"
+
+  roles:
+    - common
+    - mariadb
+    - wordpress
+    - phpmyadmin
+    - nginx

@@ -1,0 +1,16 @@
+
+FROM debian:buster
+
+RUN  apt-get -y update && apt-get install php-fpm -y php-mysql && apt install curl -y && apt install nginx -y
+
+
+COPY www.conf etc/php/7.3/fpm/pool.d
+
+COPY default /etc/nginx/sites-enabled/default
+
+RUN apt install adminer -y
+
+RUN mv /usr/share/adminer/adminer.php /var/www/html/
+
+
+CMD service php7.3-fpm start && nginx -g "daemon off;"

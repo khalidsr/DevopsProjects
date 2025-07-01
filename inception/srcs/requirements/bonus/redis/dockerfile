@@ -1,0 +1,13 @@
+FROM debian:buster
+
+RUN apt-get update -y && apt install redis-server -y
+
+COPY /tools/script1.sh .
+
+RUN chmod +x script1.sh
+
+ENTRYPOINT ./script1.sh
+
+# CMD ["./script1.sh","redis-server","--protected-mode", "no"]
+
+CMD ["/etc/init.d/redis-server" ,"restart"]
