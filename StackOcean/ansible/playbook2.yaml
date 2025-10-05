@@ -1,0 +1,59 @@
+---
+- name: Initialize Kubernetes master
+  hosts: master
+  become: yes
+  tasks:
+    - name: Initialize cluster
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --cri-socket unix:///var/run/containerd/containerd.sock --upload-certs
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Set up kubeconfig for root
+      block:
+        - name: Create .kube directory
+          file:
+            path: /root/.kube
+            state: directory
+            mode: 0755
+
+        - name: Copy admin config
+          copy:
+            src: /etc/kubernetes/admin.conf
+            dest: /root/.kube/config
+            remote_src: yes
+            owner: root
+            group: root
+            mode: 0600
+
+    - name: Install Flannel CNI
+      command: kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: Wait for core DNS to be ready
+      command: kubectl wait --for=condition=ready pod -l k8s-app=kube-dns -n kube-system --timeout=300s
+      environment:
+        KUBECONFIG: /root/.kube/config
+      register: dns_wait_result
+      until: dns_wait_result.rc == 0
+      retries: 10
+      delay: 30
+
+    - name: Generate permanent join command
+      shell: |
+        kubeadm token create --ttl 0 --print-join-command
+      register: permanent_join_command
+      changed_when: false
+      environment:
+        KUBECONFIG: /root/.kube/config
+
+    - name: Display permanent join command
+      debug:
+        msg: "Permanent join command: {{ permanent_join_command.stdout }}"
+
+- name: Join workers with permanent token
+  hosts: workers
+  become: yes
+  tasks:
+    - name: Join worker to cluster
+      command: "{{ hostvars['k8s-master'].permanent_join_command.stdout }} --cri-socket unix:///var/run/containerd/containerd.sock"

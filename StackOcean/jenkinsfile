@@ -1,0 +1,78 @@
+pipeline{
+    agent any
+    tools{
+        jdk 'jdk17'
+        nodejs 'node16'
+    }
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+    stages {
+        stage('Clean Workspace'){
+            steps{
+                cleanWs()
+            }
+        }
+        
+        stage('Checkout from Git'){
+            steps{
+               git branch: 'main', url: 'https://github.com/Aj7Ay/Netflix-clone.git'
+            }
+        }
+        
+        stage("SonarQube Analysis"){
+            steps{
+                withSonarQubeEnv('sonar-server') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Netflix \
+                    -Dsonar.projectKey=Netflix '''
+                }
+            }
+        }
+        
+        stage("Quality Gate"){
+           steps {
+                script {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
+                }
+            }
+        }
+        
+        stage('Install Dependencies') {
+            steps {
+                sh "npm install"
+            }
+        }
+        
+        stage('Build Application') {
+            steps {
+                script {
+                    sh '''
+                        echo "=== Building Application ==="
+                        npm run build
+                        echo "Application built successfully"
+                    '''
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            steps {
+                script {
+                    sh '''
+                        echo "Security Check" > security-report.txt
+                        echo "================" >> security-report.txt
+                        npm audit --audit-level moderate >> security-report.txt 2>&1 || echo "Security audit completed" >> security-report.txt
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        
+        success {
+            echo "PIPELINE COMPLETED SUCCESSFULLY!"
+
+        }
+    }
+}

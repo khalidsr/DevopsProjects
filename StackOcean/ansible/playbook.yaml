@@ -1,0 +1,119 @@
+---
+- name: Deployement Netflix in DigitalOcean
+  hosts: netflex-do
+  become: yes
+  remote_user: root
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+        state: present
+
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
+        state: present
+        filename: docker
+
+    - name: Install Docker CE
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+
+    - name: Install Docker Compose plugin
+      apt:
+        name:
+          - docker-compose-plugin
+        state: present
+
+    - name: Ensure docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create Jenkins data volume
+      community.docker.docker_volume:
+        name: jenkins_home
+        state: present
+
+    - name: Create SonarQube data volume
+      community.docker.docker_volume:
+        name: sonarqube_data
+        state: present
+
+    - name: Create SonarQube extensions volume
+      community.docker.docker_volume:
+        name: sonarqube_extensions
+        state: present
+    
+    - name: Create Prometheus data volume
+      community.docker.docker_volume:
+        name: prometheus_data
+        state: present
+
+    - name: Create Grafana data volume
+      community.docker.docker_volume:
+        name: grafana_data
+        state: present
+
+    - name: Ensure /opt/docker exists
+      file:
+        path: /opt/docker
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy docker-compose.yaml
+      copy:
+        src: docker-compose.yaml
+        dest: /opt/docker/docker-compose.yaml
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Ensure /opt/docker/prometheus exists
+      file:
+        path: /opt/docker/prometheus
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy Prometheus config
+      copy:
+        src: prometheus.yml
+        dest: /opt/docker/prometheus/prometheus.yml
+        owner: root
+        group: root
+        mode: '0644'
+
+
+    - name: Start Jenkins and SonarQube using docker-compose v2
+      community.docker.docker_compose_v2:
+        project_src: /opt/docker
+        state: present
+        pull: always      
+        recreate: always 
+
